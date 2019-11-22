@@ -1,0 +1,4 @@
+Code to run (i) Article / sentence classification (ii) Train a language model (iii) Summarization (this one is coming)
+
+1. The runs directory is diagnostic information from the language model scripts
+2. The output stores the results of both the language model and article classification
