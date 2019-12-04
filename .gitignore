@@ -1,3 +1,5 @@
 outputs/*
 runs/*
 config.json
+data/*
+figures/*

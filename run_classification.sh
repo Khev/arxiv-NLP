@@ -21,6 +21,7 @@
 #export CUDA_VISIBLE_DEVICES=0
 
 #Run test: arguments are N, data_type, where data_type = [title,abstract, fulltext]
+#python sentence-classification-bert-pretrained.py 100 'title'
 
 python sentence-classification-bert-pretrained.py 10000000 'title' --batch_size 128
 
@@ -28,3 +29,8 @@ python sentence-classification-bert-pretrained.py 10000000 'title' --batch_size 
 #python sentence-prediction-bert-pretrained.py 10000000 'title'
 #python sentence-prediction-bert-pretrained.py 10000000 'abstract'
 #python sentence-prediction-bert-pretrained.py 10000000 'fulltext'
+#python sentence-classification-bert-pretrained.py 10000000 'title'
+#python sentence-classification-bert-pretrained.py 100000 'abstract'
+#python sentence-classification-bert-pretrained.py 10000000 'fulltext'
+
+
