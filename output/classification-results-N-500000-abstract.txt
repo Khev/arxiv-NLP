@@ -1,0 +1,1 @@
+abstract: top1, top3, top5, perplexity = 0.58, 0.80, 0.87, 1.00

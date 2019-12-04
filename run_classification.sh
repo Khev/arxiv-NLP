@@ -17,7 +17,7 @@
 
 #Main -- full N = 10^7 graphs all the data -- uncomment when read
 #python sentence-classification-bert-pretrained.py 10000000 'title'
-python sentence-classification-bert-pretrained.py 100000 'abstract'
+python sentence-classification-bert-pretrained.py 500000 'abstract'
 #python sentence-classification-bert-pretrained.py 10000000 'fulltext'
 
 
