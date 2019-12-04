@@ -5,13 +5,15 @@ import matplotlib.pyplot as plt
 from collections import defaultdict
 import torch, io, gzip, json, random, argparse, os
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
-from keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.preprocessing.sequence import pad_sequences
 from sklearn.model_selection import train_test_split
-from pytorch_pretrained_bert import BertTokenizer, BertConfig
-from pytorch_pretrained_bert import BertAdam, BertForSequenceClassification
+from transformers import (BertTokenizer, BertConfig, AdamW, BertForSequenceClassification,
+        WarmupLinearSchedule)
 
+from arxiv_public_data.config import DIR_BASE, DIR_OUTPUT, DIR_FULLTEXT
 
-f_metadata ='/home/khev/research/arxiv-public-datasets/arxiv-data/arxiv-metadata-oai-2019-03-01.json.gz'
+#f_metadata ='/home/khev/research/arxiv-public-datasets/arxiv-data/arxiv-metadata-oai-2019-03-01.json.gz'
+f_metadata = os.path.joni(DIR_BASE, 'arxiv-metadata-oai-2019-03-01.json.gz')
 
 #Got these from Matt
 cat_map = {
@@ -63,13 +65,6 @@ def load_ith_fulltext(i):
      FILL THIS IN COLIN
      """
 
-
-def shuffle(arr, seed=14850):
-    """ Deterministic in-place shuffling """
-    rng = np.random.RandomState(seed)
-    rng.shuffle(arr)
-    return arr
-
 # I should experiment with and without this
 def clean_doc(x):
     x = x.lower()
@@ -89,7 +84,7 @@ def clean_doc(x):
     return x
 
 
-def load_data(N,fname):
+def load_data(N, fname):
     #fname ='/home/khev/research/arxiv-public-datasets/arxiv-data/arxiv-metadata-oai-2019-03-01.json.gz'
     metadata = []
     ctr = 0
@@ -150,7 +145,7 @@ def process_data_sub(metadata, data_type='title'):
     """
 
     sentences, labels, label_dict = [], [], {}
-    for i,m in enumerate(metadata):
+    for i, m in enumerate(metadata):
 
         #sentences / titles
         if data_type != 'fulltext':
@@ -172,7 +167,7 @@ def process_data_sub(metadata, data_type='title'):
         try:
             index = category.index('.')
         except ValueError:
-                pass
+            pass
             
         main_cat = category[:index]
         new_main_cat = cat_map[main_cat]
@@ -229,7 +224,7 @@ if __name__ == '__main__':
     parser.add_argument('N', type=int, help='number of documents')
     parser.add_argument('data_type', type=str, help='options = [title,abstract]')
     parser.add_argument('--gpu', type=bool, default=True,  help='use GPU or not')
-    parser.add_argument('--batch_size',type=int,default=4, help='number of samples per batch to GPU')
+    parser.add_argument('--batch_size',type=int,default=8, help='number of samples per batch to GPU')
 
     args = parser.parse_args()
     gpu = args.gpu
@@ -237,14 +232,16 @@ if __name__ == '__main__':
     else: device = torch.device("cpu")
 
     #Prep
-    MAX_LENS = [50, 250, 500]  #truncate all titles, abstracts, fulltext to this level
-    N, data_type = args.N, args.data_type
-    if data_type == 'title':
-         MAX_LEN = MAX_LENS[0]
-    elif data_type == 'abstract':
-         MAX_LEN = MAX_LENS[1]
-    elif data_type == 'fulltext':
-         MAX_LEN = MAX_LENS[2]
+    #MAX_LENS = [50, 250, 500]  #truncate all titles, abstracts, fulltext to this level
+    #N, data_type = args.N, args.data_type
+    #if data_type == 'title':
+    #     MAX_LEN = MAX_LENS[0]
+    #elif data_type == 'abstract':
+    #     MAX_LEN = MAX_LENS[1]
+    #elif data_type == 'fulltext':
+    #     MAX_LEN = MAX_LENS[2]
+
+    MAX_LEN = 512  # BERT pretrained model width
         
     #Load and process data
     print('Loading data')
@@ -256,7 +253,7 @@ if __name__ == '__main__':
     tokenized_texts = [tokenizer.tokenize(sent) for sent in sentences]
     input_ids = [tokenizer.convert_tokens_to_ids(x) for x in tokenized_texts] #bert tokenizer
     input_ids = pad_sequences(input_ids, maxlen=MAX_LEN, dtype="long", truncating="post", padding="post") #pad
-    
+    print('Finished Tokenizing')
 
     # Create a mask of 1s for each token followed by 0s for padding
     attention_masks = []
@@ -264,10 +261,12 @@ if __name__ == '__main__':
         seq_mask = [float(i>0) for i in seq]
         attention_masks.append(seq_mask)
         
+    print('Splitting data')
     train_inputs, validation_inputs, train_labels, validation_labels = train_test_split(input_ids, labels, 
                                                                 random_state=2018, test_size=0.1)
     train_masks, validation_masks, _, _ = train_test_split(attention_masks, input_ids,
                                                  random_state=2018, test_size=0.1)
+
     
     
     # Convert all of our data into torch tensors, the required datatype for our model
@@ -294,6 +293,7 @@ if __name__ == '__main__':
     
     
     #Model
+    print("Loading model")
     model = BertForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=len(label_dict))
     if gpu:
         model.cuda()
@@ -307,18 +307,24 @@ if __name__ == '__main__':
          'weight_decay_rate': 0.0}
     ]
     
-    # This variable contains all of the hyperparemeter information our training loop needs
-    optimizer = BertAdam(optimizer_grouped_parameters,
-                         lr=2e-5,
-                         warmup=.1)
     
     
     
     #Test and train
     # Store our loss and accuracy for plotting
     train_loss_set = []
-    epochs = 2
+    epochs = 10 
 
+    num_training_steps = epochs * len(train_dataloader)
+
+    # This variable contains all of the hyperparemeter information our training loop needs
+    optimizer = AdamW(optimizer_grouped_parameters, lr=2e-5)
+    scheduler = WarmupLinearSchedule(
+        optimizer, warmup_steps=0.1 * num_training_steps,
+        t_total=num_training_steps
+    )
+
+    print("Beginning training")
     # trange is a tqdm wrapper around the normal python range
     for _ in trange(epochs, desc="Epoch"):
         model.train()
@@ -334,12 +340,14 @@ if __name__ == '__main__':
             # Clear out the gradients (by default they accumulate)
             optimizer.zero_grad()
             # Forward pass
-            loss = model(b_input_ids, token_type_ids=None, attention_mask=b_input_mask, labels=b_labels)
-            train_loss_set.append(loss.item())    
+            outputs = model(b_input_ids, token_type_ids=None, attention_mask=b_input_mask, labels=b_labels)
+            loss = outputs[0]
+            train_loss_set.append(loss)    
             #Backward pass
             loss.backward()
             # Update parameters and take a step using the computed gradient
             optimizer.step()
+            scheduler.step()
 
         tr_loss += loss.item()
         nb_tr_examples += b_input_ids.size(0)
@@ -361,7 +369,8 @@ if __name__ == '__main__':
             # Telling the model not to compute or store gradients, saving memory and speeding up validation
             with torch.no_grad():
                 # Forward pass, calculate logit predictions
-                logits = model(b_input_ids, token_type_ids=None, attention_mask=b_input_mask)
+                outputs = model(b_input_ids, token_type_ids=None, attention_mask=b_input_mask)
+                logits = outputs[0]
 
             # Move logits and labels to CPU
             logits = logits.detach().cpu().numpy()
