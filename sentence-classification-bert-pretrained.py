@@ -161,21 +161,14 @@ def process_data_sub(metadata, data_type='title'):
         #category
         category = m['categories'][0].split(' ')[0]
         
-        #need to replace the main categories -- they have form main_cat:sub_cat
-        #so I need to swap the main_cat using the map_cat dict above
-        index = len(category)
-        try:
-            index = category.index('.')
-        except ValueError:
-            pass
-            
-        main_cat = category[:index]
-        new_main_cat = cat_map[main_cat]
-        category = new_main_cat + category[index:]
+        #update cateogies -- apply matt's map
+        if category in cat_map:
+            category = cat_map[category]
         
+        #Then add to the dics
         if category not in label_dict:
             index = len(label_dict)
-            label_dict[category] = index  # {'hep-ph':2}
+            label_dict[category] = index  # ex: {'hep-ph':0, 'math.CO:1',,}
         else:
             index = label_dict[category]
         labels.append(index)
@@ -224,7 +217,7 @@ if __name__ == '__main__':
     parser.add_argument('N', type=int, help='number of documents')
     parser.add_argument('data_type', type=str, help='options = [title,abstract]')
     parser.add_argument('--gpu', type=bool, default=True,  help='use GPU or not')
-    parser.add_argument('--batch_size',type=int,default=8, help='number of samples per batch to GPU')
+    parser.add_argument('--batch_size',type=int,default=2, help='number of samples per batch to GPU')
     parser.add_argument('--epochs', type=int, default = 2, help='number of epochs')
 
     args = parser.parse_args()
@@ -247,8 +240,9 @@ if __name__ == '__main__':
     #Load and process data
     print('Loading data')
     N = args.N
+    data_type = args.data_type
     metadata = load_data(N,f_metadata)
-    sentences, labels, label_dict = process_data_sub(metadata, data_type='abstract')
+    sentences, labels, label_dict = process_data_sub(metadata, data_type=data_type)
     print('Num classes = {}'.format(len(label_dict)))
     print('Tokenizing')
     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
@@ -391,7 +385,6 @@ if __name__ == '__main__':
     acc3 /= nb_eval_steps
     acc5 /= nb_eval_steps
     
-    data_type = args.data_type
     num_examples = len(batch)*nb_eval_steps
     perplexity = 2** (-logliklihood / num_examples / np.log(2))
     line = '{}: top1, top3, top5, perplexity = {:.2f}, {:.2f}, {:.2f}, {:.2f}'.format(data_type, acc1,acc3,acc5,perplexity)
