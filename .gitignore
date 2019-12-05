@@ -3,3 +3,4 @@ runs/*
 config.json
 data/*
 figures/*
+*.swp

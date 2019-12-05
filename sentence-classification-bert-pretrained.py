@@ -1,7 +1,6 @@
 import numpy as np
 import pickle as pkl
 from tqdm import tqdm, trange
-import matplotlib.pyplot as plt
 from collections import defaultdict
 import torch, io, gzip, json, random, argparse, os
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
@@ -9,13 +8,12 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 from sklearn.model_selection import train_test_split
 from transformers import (BertTokenizer, BertConfig, AdamW, BertForSequenceClassification,
         WarmupLinearSchedule)
-
+from ftfy import fix_text
 from arxiv_public_data.config import DIR_BASE, DIR_OUTPUT, DIR_FULLTEXT
 
-#f_metadata ='/home/khev/research/arxiv-public-datasets/arxiv-data/arxiv-metadata-oai-2019-03-01.json.gz'
 f_metadata = os.path.join(DIR_BASE, 'arxiv-metadata-oai-2019-03-01.json.gz')
 
-#Got these from Matt
+#Got these from Matt. Some are redundant, oddly.
 cat_map = {
   "astro-ph": "astro-ph",
   "cond-mat": "cond-mat",
@@ -65,115 +63,76 @@ def load_ith_fulltext(i):
      FILL THIS IN COLIN
      """
 
-# I should experiment with and without this
+        
 def clean_doc(x):
-    x = x.lower()
-    x = x.replace('\n',' ')
-    x = x.replace(' " ',' ')
-    x = x.replace('"','')
-    x = x.replace("'", "")
-    x = x.replace(':',' ')
-    x = x.replace('?',' ')
-    x = x.replace('-',' ')
-    x = x.replace(',','')
-    x = x.replace('$',' $ ')
-    x = x.replace('.','')
-    x = x.replace('!',' ')
-    x = x.replace('(',' ')
-    x = x.replace(')',' ')
-    return x
+    return fix_text(x)
 
 
-def load_data(N, fname):
-    #fname ='/home/khev/research/arxiv-public-datasets/arxiv-data/arxiv-metadata-oai-2019-03-01.json.gz'
-    metadata = []
-    ctr = 0
+def load_data(N, fname, data_type):
+    
+    
+    #MAX_LENS = [50, 250, 500]  #truncate all titles, abstracts, fulltext to this level
+    #N, data_type = args.N, args.data_type
+    #if data_type == 'title':
+    #     MAX_LEN = MAX_LENS[0]
+    #elif data_type == 'abstract':
+    #     MAX_LEN = MAX_LENS[1]
+    #elif data_type == 'fulltext':
+    #     MAX_LEN = MAX_LENS[2]
+    
+    MAX_LEN = 512  #BERT default
+    input_ids = []
+    labels, label_dict, ctr = [], {}, 0
+    attention_masks = []
+    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
     with gzip.open(fname, 'rt', encoding='utf-8') as fin:
         for row in fin.readlines():
-            metadata.append(json.loads(row))
+
+            #Load metadata
+            m = json.loads(row)
+
+            #Build label list
+            if data_type != 'fulltext':
+                sentence = clean_doc(m[data_type])
+            else:
+                sentence = load_ith_fulltext(i)  ###needs to be filled in
+                sentence = clean_doc(sentence)
+
+            # We need to add special tokens at the beginning and end of each sentence for BERT to work properly
+            sentence = "[CLS] " + sentence + " [SEP]" 
+
+            #category
+            category = m['categories'][0].split(' ')[0]
+
+            #update cateogies -- apply matt's map
+            if category in cat_map: category = cat_map[category]
+
+            #Then add to the dics
+            if category not in label_dict:
+                index = len(label_dict)
+                label_dict[category] = index  # ex: {'hep-ph':0, 'math.CO:1',,}
+            else:
+                index = label_dict[category]
+            labels.append(index)
+
+
+            #Tokenize
+            tokenized_sentence = tokenizer.tokenize(sentence)  #Ex: ['the', 'cat', 'ate']
+
+            #Convert to IDs + pad
+            input_id = tokenizer.convert_tokens_to_ids(tokenized_sentence)  #Ex: [1,10,3]
+            input_id = pad_sequences([input_id], maxlen=MAX_LEN, dtype="long",truncating="post",padding="post")
+            input_ids.append(input_id[0])
+            
+            #Attention mask
+            seq_mask = [float(i>0) for i in input_id[0]]
+            attention_masks.append(seq_mask)
+            
+            #Ctr
             ctr += 1
-            if ctr > N:
-                break
-    return metadata
-
-
-def process_data(metadata, data_type='title'):
-    """
-    data_type \element ['title', 'abstract']
-    """
-
-    sentences, labels, label_dict = [], [], {}
-    for m in metadata:
-
-        #sentences / titles
-        sentence = clean_doc(m[data_type])
-        
-        # We need to add special tokens at the beginning and end of each sentence for BERT to work properly
-        sentence = "[CLS] " + sentence + " [SEP]" 
-        sentences.append(sentence)
-
-        #category
-        category = m['categories'][0].split(' ')[0]
-
-        #Take only primary index: 'math.CO' --> 'math'
-        primaryCategories = False
-        if primaryCategories:
-            cutoff = len(category)
-            try:
-                cutoff = category.index('.')
-            except ValueError:
-                    pass
-            category = category[:cutoff]
-        
-        if category not in label_dict:
-            index = len(label_dict)
-            label_dict[category] = index  # e.g. {'hep-ph':2}
-        else:
-            index = label_dict[category]
-        labels.append(index)
-
-    return sentences, labels, label_dict
-
-
-def process_data_sub(metadata, data_type='title'):
-    """
-    Same as above, except I merge categories that are the same
-    (origianl data in buggy: category names changed over times so have to be fixed)
-    
-    data_type='title' or 'abstract' or 'fulltext'
-   
-    """
-
-    sentences, labels, label_dict = [], [], {}
-    for i, m in enumerate(metadata):
-
-        #sentences / titles
-        if data_type != 'fulltext':
-            sentence = clean_doc(m[data_type])
-        else:
-            sentence = load_ith_fulltext(i)  ###needs to be filled in
-            sentence = clean_doc(sentence)
-        
-        # We need to add special tokens at the beginning and end of each sentence for BERT to work properly
-        sentence = "[CLS] " + sentence + " [SEP]" 
-        sentences.append(sentence)
-
-        #category
-        category = m['categories'][0].split(' ')[0]
-        
-        #update cateogies -- apply matt's map
-        if category in cat_map:
-            category = cat_map[category]
-        
-        #Then add to the dics
-        if category not in label_dict:
-            index = len(label_dict)
-            label_dict[category] = index  # ex: {'hep-ph':0, 'math.CO:1',,}
-        else:
-            index = label_dict[category]
-        labels.append(index)
-
-    return sentences, labels, label_dict
+            if ctr >= N: break
+                
+    return np.array(input_ids), attention_masks, labels, label_dict  
 
 
 # Function to calculate the accuracy of our predictions vs labels
@@ -217,7 +176,7 @@ if __name__ == '__main__':
     parser.add_argument('N', type=int, help='number of documents')
     parser.add_argument('data_type', type=str, help='options = [title,abstract]')
     parser.add_argument('--gpu', type=bool, default=True,  help='use GPU or not')
-    parser.add_argument('--batch_size',type=int,default=2, help='number of samples per batch to GPU')
+    parser.add_argument('--batch_size',type=int,default=4, help='number of samples per batch to GPU')
     parser.add_argument('--epochs', type=int, default = 2, help='number of epochs')
 
     args = parser.parse_args()
@@ -225,39 +184,11 @@ if __name__ == '__main__':
     if gpu == True: device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     else: device = torch.device("cpu")
 
-    #Prep
-    #MAX_LENS = [50, 250, 500]  #truncate all titles, abstracts, fulltext to this level
-    #N, data_type = args.N, args.data_type
-    #if data_type == 'title':
-    #     MAX_LEN = MAX_LENS[0]
-    #elif data_type == 'abstract':
-    #     MAX_LEN = MAX_LENS[1]
-    #elif data_type == 'fulltext':
-    #     MAX_LEN = MAX_LENS[2]
-
-    MAX_LEN = 512  # BERT pretrained model width
-        
     #Load and process data
-    print('Loading data')
-    N = args.N
-    data_type = args.data_type
-    metadata = load_data(N,f_metadata)
-    sentences, labels, label_dict = process_data_sub(metadata, data_type=data_type)
-    print('Num classes = {}'.format(len(label_dict)))
-    print('Tokenizing')
-    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
-    tokenized_texts = [tokenizer.tokenize(sent) for sent in sentences]
-    input_ids = [tokenizer.convert_tokens_to_ids(x) for x in tokenized_texts] #bert tokenizer
-    input_ids = pad_sequences(input_ids, maxlen=MAX_LEN, dtype="long", truncating="post", padding="post") #pad
-    print('Finished Tokenizing')
-
-    # Create a mask of 1s for each token followed by 0s for padding
-    attention_masks = []
-    for seq in input_ids:
-        seq_mask = [float(i>0) for i in seq]
-        attention_masks.append(seq_mask)
+    print('Loading & prepping data')
+    N, data_type = args.N, args.data_type
+    input_ids, attention_masks, labels, label_dict = load_data(N,f_metadata,data_type)
         
-    print('Splitting data')
     train_inputs, validation_inputs, train_labels, validation_labels = train_test_split(input_ids, labels, 
                                                                 random_state=2018, test_size=0.1)
     train_masks, validation_masks, _, _ = train_test_split(attention_masks, input_ids,
@@ -287,6 +218,7 @@ if __name__ == '__main__':
     validation_sampler = SequentialSampler(validation_data)
     validation_dataloader = DataLoader(validation_data, sampler=validation_sampler, batch_size=batch_size)
     
+    print('Loading & prepping data')
     
     #Model
     print("Loading model")
@@ -302,8 +234,6 @@ if __name__ == '__main__':
         {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)],
          'weight_decay_rate': 0.0}
     ]
-    
-    
     
     
     #Test and train
