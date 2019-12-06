@@ -295,17 +295,18 @@ if __name__ == '__main__':
             # Forward pass
             outputs = model(b_input_ids, token_type_ids=None, attention_mask=b_input_mask, labels=b_labels)
             loss = outputs[0]
-            train_loss_set.append(loss)    
+            tr_loss += loss.item()
+            #train_loss_set.append(loss)    
             #Backward pass
             loss.backward()
             # Update parameters and take a step using the computed gradient
             optimizer.step()
             scheduler.step()
             
-        tr_loss += loss.item()
         nb_tr_examples += b_input_ids.size(0)
-        nb_tr_steps += 1
-        print("Train loss: {}".format(tr_loss/nb_tr_steps))
+        total = nb_tr_examples*step              #total number of losses
+        tr_loss /= 1.0*(total)
+        print("Train loss: {}".format(tr_loss))
         
         #Find val loss -- NEW CODE HERE
         printValLoss = False

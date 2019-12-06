@@ -21,9 +21,13 @@
 #export CUDA_VISIBLE_DEVICES=0
 
 #Run test: arguments are N, data_type, where data_type = [title,abstract, fulltext]
-python sentence-classification-bert-pretrained.py 100 'title'
+#python sentence-classification-bert-pretrained.py 100 'title'
 
 #python sentence-classification-bert-pretrained.py 10000000 'title' --batch_size 128
+
+#Main on 10^5 data
+python sentence-classification-bert-pretrained.py 100000 'title' --epochs=2 --batch_size=4
+python sentence-classification-bert-pretrained.py 100000 'abstract' --epochs=2 --batch_size=1
 
 #Main -- full N = 10^7 graphs all the data -- uncomment when read
 #python sentence-prediction-bert-pretrained.py 10000000 'title'
@@ -32,11 +36,5 @@ python sentence-classification-bert-pretrained.py 100 'title'
 #python sentence-classification-bert-pretrained.py 10000000 'title'
 
 
-#<<<<<<< HEAD
-#python sentence-classification-bert-pretrained.py 500000 'abstract'
-#=======
-#python sentence-classification-bert-pretrained.py 100000 'abstract'
-#>>>>>>> e395ad47549ef6eb4593121fab341daf639c498e
-#python sentence-classification-bert-pretrained.py 10000000 'fulltext'
 
 
