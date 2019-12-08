@@ -372,7 +372,7 @@ if __name__ == '__main__':
     #Normalize: total number = nb_evla
     acc1, acc3, acc5 = top1 / total, top3 / total, top5 / total
     perplexity = 2**(-logliklihood / total)
-    print('total,  loglikihood = {:.2f}, {:.2f}'.format(total, logliklihood))
+    print('size of test data,  loglikihood = {:.2f}, {:.2f}'.format(total, logliklihood))
     line = '{}: top1, top3, top5, perplexity (base-2) = {:.2f}, {:.2f}, {:.2f}, {:.2f}'.format(data_type, \
                                                                                                acc1,acc3,acc5,perplexity)
     print(line)
