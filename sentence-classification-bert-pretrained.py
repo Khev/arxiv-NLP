@@ -338,7 +338,7 @@ if __name__ == '__main__':
     #Tracking variables 
     model.eval()
     eval_loss, eval_accuracy = 0, 0
-    nb_eval_steps, nb_eval_examples = 0, 0
+    total = 0
 
     #Evaluate data for one epoch
     top1, top3, top5, logliklihood = 0,0,0,0
@@ -358,7 +358,7 @@ if __name__ == '__main__':
         label_ids = b_labels.to('cpu').numpy()
 
         #evaluate
-        #print('logits.shape, labels = {}, {}'.format(logits.shape, label_ids))
+        #print('logits.shape, b_input_ids.shape = {}, {}'.format(logits.shape, b_input_ids.shape))
         #np.savetxt('logits.txt',logits)
         #np.savetxt('labels.txt',label_ids)
         top1_temp, top3_temp, top5_temp, logliklihood_temp = evaluate(logits,label_ids)
@@ -367,12 +367,12 @@ if __name__ == '__main__':
         top3 += top3_temp
         top5 += top5_temp
         logliklihood += logliklihood_temp
-        nb_eval_steps += 1
+        total += logits.shape[0]  #how many data I used in this batch
 
     #Normalize: total number = nb_evla
-    total = 1.0*(nb_eval_steps*batch_size)
-    acc1, acc3, acc5, logliklihood = top1 / total, top3 / total, top5 / total, logliklihood / total
+    acc1, acc3, acc5 = top1 / total, top3 / total, top5 / total
     perplexity = 2**(-logliklihood / total)
+    print('total,  loglikihood = {:.2f}, {:.2f}'.format(total, logliklihood))
     line = '{}: top1, top3, top5, perplexity (base-2) = {:.2f}, {:.2f}, {:.2f}, {:.2f}'.format(data_type, \
                                                                                                acc1,acc3,acc5,perplexity)
     print(line)
