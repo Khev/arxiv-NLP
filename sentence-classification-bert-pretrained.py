@@ -308,30 +308,30 @@ if __name__ == '__main__':
         tr_loss /= 1.0*(total)
         print("Train loss: {}".format(tr_loss))
         
-        #Find val loss -- NEW CODE HERE
-        printValLoss = False
-        if printValLoss:
-            model.eval()
-            val_loss = 0
-            nb_eval_steps, nb_eval_examples = 0, 0
-
-            #Evaluate data for one epoch
-            for batch in validation_dataloader:
-                # Add batch to GPU
-                batch = tuple(t.to(device) for t in batch)
-                # Unpack the inputs from our dataloader
-                b_input_ids, b_input_mask, b_labels = batch
-                # Telling the model not to compute or store gradients, saving memory and speeding up validation
-                with torch.no_grad():
-                    # Forward pass, calculate logit predictions
-                    outputs = model(b_input_ids, token_type_ids=None, attention_mask=b_input_mask)
-                    print('val outputs = {}'.format(outputs))
-                    loss = outputs[0]
-                    val_loss_set.append(loss)
+        #Add the end of every epoch, find val_loss
+        val_loss, total = 0, 0
+        model.eval()
+        for step, batch in enumerate(validation_dataloader):
+            # Add batch to GPU
+            batch = tuple(t.to(device) for t in batch)
+            # Unpack the inputs from our dataloader
+            b_input_ids, b_input_mask, b_labels = batch
+            # Clear out the gradients (by default they accumulate)
+            optimizer.zero_grad()
+            # Forward pass
+            outputs = model(b_input_ids, token_type_ids=None, attention_mask=b_input_mask, labels=b_labels)
+            loss, logits = outputs[:2]
             val_loss += loss.item()
-            nb_eval_examples += b_input_ids.size(0)
-            nb_eval_steps += 1
-            print("Val loss: {}".format(val_loss/nb_eval_steps))
+            #Backward pass
+            loss.backward()
+            # Update parameters and take a step using the computed gradient
+            optimizer.step()
+            scheduler.step()
+
+            total += logits.shape[0]
+
+        val_loss /= 1.0*total
+        print('Val loss: {}'.format(val_loss))
         
     print('Training done: evaluating')
     
@@ -350,6 +350,7 @@ if __name__ == '__main__':
         with torch.no_grad():
             # Forward pass, calculate logit predictions
             outputs = model(b_input_ids, token_type_ids=None, attention_mask=b_input_mask)
+            print('outputs = {}'.format(outputs))
             logits = outputs[0]
 
         # Move logits and labels to CPU
