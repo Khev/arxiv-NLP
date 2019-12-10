@@ -1,1 +1,1 @@
-title: top1, top3, top5, perplexity (base-2) = 0.61, 0.80, 0.86, 1.00
+title: top1, top3, top5, perplexity (base-2) = 0.61, 0.80, 0.86, 4.27

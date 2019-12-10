@@ -337,7 +337,6 @@ if __name__ == '__main__':
     
     #Tracking variables 
     model.eval()
-    eval_loss, eval_accuracy = 0, 0
     total = 0
 
     #Evaluate data for one epoch
