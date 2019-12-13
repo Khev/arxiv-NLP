@@ -1,4 +1,4 @@
-outputs/*
+output/*
 runs/*
 config.json
 data/*

@@ -369,7 +369,7 @@ if __name__ == '__main__':
         logliklihood += logliklihood_temp
         total += logits.shape[0]  #how many data I used in this batch
 
-    #Normalize: total number = nb_evla
+    #Normalize: total number = nb_eval
     acc1, acc3, acc5 = top1 / total, top3 / total, top5 / total
     perplexity = 2**(-logliklihood / total)
     print('size of test data,  loglikihood = {:.2f}, {:.2f}'.format(total, logliklihood))

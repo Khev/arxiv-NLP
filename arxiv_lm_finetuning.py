@@ -137,8 +137,9 @@ class ArXivDataset(Dataset):
         #Load in docs
         
         #Tokenizer and pad
-        temp = {'title':50, 'abstract':200, 'fulltext':500}
-        MAX_LEN = temp[data_type]
+        #temp = {'title':50, 'abstract':200, 'fulltext':500}
+        #MAX_LEN = temp[data_type]
+        MAX_LEN = 512
         self.examples = []
         for doc in docs:
             input_ids = tokenizer.convert_tokens_to_ids(tokenizer.tokenize(doc))
@@ -559,6 +560,13 @@ def main():
         docs = load_fulltexts()  #FILL THIS IN COLIN
     cutoff = int(0.9*len(docs))
     docs_train, docs_test = docs[:cutoff], docs[cutoff:]
+    
+    #Save ten random doc_tests for prompts later
+    n = int(0.1*len(docs_test))
+    #n = 5
+    prompts = random.sample(docs_test,n)
+    prompts = [p.replace('\n','') for p in prompts]
+    np.savetxt('output/language-model-title/test-docs-for-prompts.txt',prompts,fmt='%s',delimiter='\n')
     
     logger.info("Training/evaluation parameters %s", args)
 
