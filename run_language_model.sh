@@ -36,11 +36,12 @@ python arxiv_lm_finetuning.py \
     --train_data_file=$TRAIN_FILE \
     --do_eval \
     --eval_data_file=$TEST_FILE \
-    --save_steps=1000 \
+    --save_steps=100000000 \
     --save_total_limit=5\
     --N=10000000 \
     --type='title' \
-    --per_gpu_train_batch_size=3
+    --per_gpu_train_batch_size=2 \
+    --num_train_epochs=10 
 
 #python arxiv_lm_finetuning.py \
 #    --output_dir=output/language-model-abstract \

@@ -264,7 +264,7 @@ if __name__ == '__main__':
         for i,row in enumerate(f.readlines()):
             prompt = " ".join(row.split()[:k])  #take first k words as prompt
             generated_text = prompt + main(prompt)
-            #print('\n\n Generated text: {} \n \n'.format(generated_text))
+            print('\n\n Generated text: {} \n \n'.format(generated_text))
             outs.append(generated_text)
             if i > n: break
     np.savetxt('output/language-model-title/generated-docs.txt',outs,fmt='%s',delimiter='\n')
