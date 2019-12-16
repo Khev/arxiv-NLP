@@ -564,11 +564,13 @@ def main():
     #Save ten random doc_tests for prompts later
     n = int(0.1*len(docs_test))
     if n < len(docs_test):
-        prompts = [p.replace('\n','') for p in docs_test]
+        prompts = [p.replace('\n',' ') for p in docs_test]
     else:
         prompts = random.sample(docs_test,n)
-        prompts = [p.replace('\n','') for p in prompts]
-    np.savetxt('output/language-model-title/test-docs-for-prompts.txt',prompts,fmt='%s',delimiter='\n')
+        prompts = [p.replace('\n',' ') for p in prompts]
+    temp = 'output/language-model-{}'.format(data_type)
+    if not os.path.exists(temp): os.makedirs(temp)
+    np.savetxt(os.path.join(temp, 'test-docs-for-prompts.txt'),prompts,fmt='%s',delimiter='\n')
     
     logger.info("Training/evaluation parameters %s", args)
 

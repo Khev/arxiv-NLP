@@ -18,16 +18,12 @@
 """
 from __future__ import absolute_import, division, print_function, unicode_literals
 
-import argparse
-import logging
+import argparse, os, logging, torch
 from tqdm import trange
-
-import torch
 import torch.nn.functional as F
 import numpy as np
 
 from transformers import GPT2Config, OpenAIGPTConfig, XLNetConfig, TransfoXLConfig, XLMConfig, CTRLConfig
-
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
 from transformers import OpenAIGPTLMHeadModel, OpenAIGPTTokenizer
 from transformers import XLNetLMHeadModel, XLNetTokenizer
@@ -152,37 +148,11 @@ def sample_sequence(model, length, context, num_samples=1, temperature=1, top_k=
     return generated
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model_type", default=None, type=str, required=True,
-                        help="Model type selected in the list: " + ", ".join(MODEL_CLASSES.keys()))
-    parser.add_argument("--model_name_or_path", default=None, type=str, required=True,
-                        help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS))
-    parser.add_argument("--prompt", type=str, default="")
-    parser.add_argument("--padding_text", type=str, default="")
-    parser.add_argument("--xlm_lang", type=str, default="", help="Optional language when used with the XLM model.")
-    parser.add_argument("--length", type=int, default=20)
-    parser.add_argument("--num_samples", type=int, default=1)
-    parser.add_argument("--temperature", type=float, default=1.0,
-                        help="temperature of 0 implies greedy sampling")
-    parser.add_argument("--repetition_penalty", type=float, default=1.0,
-                        help="primarily useful for CTRL model; in that case, use 1.2")
-    parser.add_argument("--top_k", type=int, default=0)
-    parser.add_argument("--top_p", type=float, default=0.9)
-    parser.add_argument("--no_cuda", action='store_true',
-                        help="Avoid using CUDA when available")
-    parser.add_argument('--seed', type=int, default=42,
-                        help="random seed for initialization")
-    parser.add_argument('--stop_token', type=str, default=None,
-                        help="Token at which text generation is stopped")
-    args = parser.parse_args()
-
-    args.device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
-    args.n_gpu = torch.cuda.device_count()
+def sample(prompt, args):
+    
 
     set_seed(args)
 
-    args.model_type = args.model_type.lower()
     model_class, tokenizer_class = MODEL_CLASSES[args.model_type]
     tokenizer = tokenizer_class.from_pretrained(args.model_name_or_path)
     model = model_class.from_pretrained(args.model_name_or_path)
@@ -215,13 +185,13 @@ def main():
             xlm_lang = tokenizer.lang2id[language]
 
         # XLM masked-language modeling (MLM) models need masked token (see details in sample_sequence)
-        is_xlm_mlm = args.model_type in ["xlm"] and 'mlm' in args.model_name_or_path
+        is_xlm_mlm = args.model_type in ["xlm"] and 'mlm' in model_name_or_path
         if is_xlm_mlm:
             xlm_mask_token = tokenizer.mask_token_id
         else:
             xlm_mask_token = None
 
-        raw_text = args.prompt if args.prompt else input("Model prompt >>> ")
+        raw_text = prompt if prompt else input("Model prompt >>> ")
         if args.model_type in ["transfo-xl", "xlnet"]:
             # Models with memory likes to have a long prompt for short inputs.
             raw_text = (args.padding_text if args.padding_text else PADDING_TEXT) + raw_text
@@ -248,13 +218,61 @@ def main():
         for o in out:
             text = tokenizer.decode(o, clean_up_tokenization_spaces=True)
             text = text[: text.find(args.stop_token) if args.stop_token else None]
-
-            print(text)
-
-        if args.prompt:
+            
+        if prompt:
             break
     return text
 
 
+
+def main():
+    
+    #Old script
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model_type", type=str, default="gpt2")
+    parser.add_argument("--model_name_or_path", type=str, default='output/language-model-title')
+    parser.add_argument("--num_docs", type=int, default = 10)
+    parser.add_argument("--prompt_length", type=int, default=3, help='Truncation length in words of input doc / prompt length')
+    parser.add_argument("--padding_text", type=str, default="")
+    parser.add_argument("--xlm_lang", type=str, default="", help="Optional language when used with the XLM model.")
+    parser.add_argument("--length", type=int, default=20)
+    parser.add_argument("--num_samples", type=int, default=1)
+    parser.add_argument("--temperature", type=float, default=1.0,
+                        help="temperature of 0 implies greedy sampling")
+    parser.add_argument("--repetition_penalty", type=float, default=1.0,
+                        help="primarily useful for CTRL model; in that case, use 1.2")
+    parser.add_argument("--top_k", type=int, default=0)
+    parser.add_argument("--top_p", type=float, default=0.9)
+    parser.add_argument("--no_cuda", action='store_true',
+                        help="Avoid using CUDA when available")
+    parser.add_argument('--seed', type=int, default=42,
+                        help="random seed for initialization")
+    parser.add_argument('--stop_token', type=str, default=None,
+                        help="Token at which text generation is stopped")
+    args = parser.parse_args()
+
+    args.device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+    args.n_gpu = torch.cuda.device_count()
+    
+    
+    
+    outs = []
+    n, k = args.num_docs, args.prompt_length #take first k words as prompt in the first n titles titles in the test set
+    dirn = os.path.join(args.model_name_or_path, 'test-docs-for-prompts.txt')
+    save_dir = os.path.join(args.model_name_or_path, 'generated-docs.txt')
+    with open(dirn,'r') as fin:
+        with open(save_dir,'w') as fout:
+            for i,row in enumerate(fin.readlines()):
+                prompt = " ".join(row.split()[:k])  #take first k words as prompt
+                original_text = row
+                generated_text = prompt + sample(prompt, args)
+                line = 'Original: {}\nGenerated: {}\n\n\n'.format(original_text, generated_text)
+                print(line)
+                fout.write(line)
+                if i > n: break
+    return
+                 
+
 if __name__ == '__main__':
     main()
+            

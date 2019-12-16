@@ -4,3 +4,5 @@ config.json
 data/*
 figures/*
 *.swp
+simple-pytorch-example*
+debug*

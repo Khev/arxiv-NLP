@@ -381,6 +381,6 @@ if __name__ == '__main__':
     DIR_NAME = './output'
     if not os.path.exists(DIR_NAME):
         os.makedirs(DIR_NAME)
-    fname = os.path.join(DIR_NAME[2:],'classification-results-N-{}-{}.txt'.format(N,data_type))
+    fname = os.path.join(DIR_NAME[2:],'classification/classification-results-N-{}-{}.txt'.format(N,data_type))
     np.savetxt(fname,[line],fmt='%s')
 
