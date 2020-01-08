@@ -6,3 +6,4 @@ figures/*
 *.swp
 simple-pytorch-example*
 debug*
+*.ipynb_checkpoints
